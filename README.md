@@ -10,19 +10,30 @@ $ deno task start
 ```
 REFRESH_TOKEN="<あなたのpixivアカウントのリフレッシュトークン>"
 ```
-リフレッシュトークンは https://gist.github.com/ZipFile/c9ebedb224406f4f11845ab700124362 か https://gist.github.com/upbit/6edda27cb1644e94183291109b8a5fde を参考にして取得します
+リフレッシュトークンは [Retrieving Auth Token](https://gist.github.com/ZipFile/c9ebedb224406f4f11845ab700124362)か [Retrieving Auth Token (with Selenium)](https://gist.github.com/upbit/6edda27cb1644e94183291109b8a5fde) を参考にして取得します
 
-2. `config.json`に設定を書く
+2. `sqlite3.db.sample`のファイル名を`sqlite3.db`に変更
+3. `config.json.sample`のファイル名を`config.json`に変更し、設定を書く
 ```
 {
     "illustSavePath":"./pic",
+    "illustRepeat":<イラスト取得反復回数、1回あたり30件>,
     "novelSavePath":"./novel",
-    "targetUserID":"<あなたのpixivアカウントのユーザーID>"
+    "novelRepeat":<小説取得反復回数、1回あたり30件>,
+    "targetUserID":"<取得したいpixivアカウントのユーザーID>"
 }
 ```
-ユーザーIDはユーザーページを開いたときのURL https://www.pixiv.net/users/<ユーザID> の <ユーザID> の部分の数字です
+ユーザーIDはユーザーページを開いたときのURL https://www.pixiv.net/users/<ユーザID> の <ユーザID> の部分の数字です  
 
-3. `sqlite3.db`を用意します
+4. 実行します
+```
+$ deno task start
+```
+
+---
+npm:@book000/pixivtsを使っています  
+[API Document](https://book000.github.io/pixivts/index.html)
+
 ```
 $ sqlite3 sqlite3.db
 
@@ -57,11 +68,3 @@ CREATE TABLE IF NOT EXISTS novel (
     create_date DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
-4. 実行します
-```
-$ deno task start
-```
-
----
-npm:@book000/pixivtsを使っています  
-[API Document](https://book000.github.io/pixivts/index.html)

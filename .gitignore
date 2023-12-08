@@ -1,0 +1,18 @@
+# 保存ディレクトリ
+novel/*
+pic/*
+
+# 設定ファイル
+.env
+config.json
+*.db
+
+# Cookie取得用
+pixiv_auth.py
+
+# 実行用
+*.sh
+*.log
+
+# responseの保存
+response.json

@@ -1,0 +1,7 @@
+{
+    "illustSavePath":"./pic",
+    "illustRepeat":1,
+    "novelSavePath":"./novel",
+    "novelRepeat":1,
+    "targetUserID":""
+}

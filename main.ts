@@ -1,24 +1,41 @@
 import { load } from "https://deno.land/std@0.207.0/dotenv/mod.ts";
 const env = await load();
-import Pixiv from "npm:@book000/pixivts"
+import Pixiv, { BookmarkRestrict, PixivIllustItem, PixivNovelItem } from "npm:@book000/pixivts"
 const refreshToken: string = env.REFRESH_TOKEN;
 const client = await Pixiv.Pixiv.of(refreshToken);
 import pixivImg from "npm:pixiv-img"
 const config: {
   illustSavePath: string,
+  illustRepeat: number,
   novelSavePath: string,
+  novelRepeat: number,
   targetUserID: number
 } = JSON.parse(await Deno.readTextFile("./config.json"))
-if(!config.targetUserID) throw new Error("config.targetUserIDが設定されていません。")
+const userId: number = config.targetUserID || Number(client.userId)
 import { extname } from "https://deno.land/std@0.177.0/path/posix.ts"
 import { Database } from "https://deno.land/x/sqlite3@0.10.0/mod.ts"
 const db = new Database("sqlite3.db")
+
+const main = async (): Promise<void> => {
+  try {
+    await illustDownload()
+  } catch (error) {
+    console.error(error)
+  }
+  try {
+    await novelDonwload()
+  } catch (error) {
+    console.error(error)
+  }
+  console.log("保存終了")
+  db.close()
+}
 
 type IllustData = {
   userName: string,
   userAccount: string,
   userID: number,
-  type: "illust"| "manga"| "ugoira",
+  type: "illust" | "manga" | "ugoira",
   id: number,
   title: string,
   url: string,
@@ -26,15 +43,22 @@ type IllustData = {
 }
 const illustDownload = async () => {
   // ユーザーのイラストブックマークを取得
-  const userId:number = config.targetUserID
-  const response = await client.userBookmarksIllust({
-    userId, 
-    restrict: "private"
-  })
-  const illusts = response.data.illusts
+  let max_bookmark_id: number | undefined
+  const illusts: PixivIllustItem[] = []
+  for (let i = 0; i <= config.illustRepeat; i++) {
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 1000))
+    const response = await client.userBookmarksIllust({
+      userId,
+      restrict: BookmarkRestrict.PRIVATE,
+      maxBookmarkId: max_bookmark_id
+    })
+    illusts.push(...response.data.illusts)
+    const next_url: string = response.data.next_url ?? ""
+    max_bookmark_id = Number(Pixiv.Pixiv.parseQueryString(next_url).max_bookmark_id)
+  }
   const illustDataArray: IllustData[] = illusts.flatMap((illust) => {
     const lisults: IllustData[] = []
-    const findMetaData = (url:string, index: number) => {
+    const findMetaData = (url: string, index: number) => {
       const illustData: IllustData = {
         userName: illust.user.name,
         userAccount: illust.user.account,
@@ -87,8 +111,8 @@ type NovelData = {
   userAccount: string,
   userID: number,
   type: "novel",
-  seriesID: number|string|undefined,
-  seriesTitle: string|undefined,
+  seriesID: number | string | undefined,
+  seriesTitle: string | undefined,
   create_date: string,
   id: number,
   title: string,
@@ -100,11 +124,19 @@ type NovelData = {
 }
 const novelDonwload = async (): Promise<void> => {
   // ユーザーのノベルブックマークを取得
-  const response = await client.userBookmarksNovel({
-    userId: config.targetUserID,
-    restrict: "private",
-  })
-  const novels = response.data.novels
+  let max_bookmark_id
+  const novels: PixivNovelItem[] = []
+  for (let i = 0; i <= config.novelRepeat; i++) {
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 1000))
+    const response = await client.userBookmarksNovel({
+      userId,
+      restrict: BookmarkRestrict.PRIVATE,
+      maxBookmarkId: max_bookmark_id
+    })
+    novels.push(...response.data.novels)
+    const next_url: string = response.data.next_url ?? ""
+    max_bookmark_id = Number(Pixiv.Pixiv.parseQueryString(next_url).max_bookmark_id)
+  }
   const novelDataArray: NovelData[] = novels.map((novel) => {
     const tags: string[] = novel.tags.map((tag) => tag.name)
     // ファイル名は255バイト以内にする
@@ -122,7 +154,7 @@ const novelDonwload = async (): Promise<void> => {
       userName: novel.user.name,
       userAccount: novel.user.account,
       userID: novel.user.id,
-      type : "novel",
+      type: "novel",
       seriesID: novel.series.id,
       seriesTitle: novel.series.title,
       create_date: novel.create_date,
@@ -135,14 +167,14 @@ const novelDonwload = async (): Promise<void> => {
       fileName: fileName,
       // text: response.data.novel_text.length,
     }
-    if(novelData.seriesID === undefined) novelData.seriesID = "シリーズなし"
-    if(novelData.seriesTitle === undefined) novelData.seriesTitle = "シリーズなし"
+    if (novelData.seriesID === undefined) novelData.seriesID = "シリーズなし"
+    if (novelData.seriesTitle === undefined) novelData.seriesTitle = "シリーズなし"
     return novelData;
   })
   // SQLと照合して新規のものだけを抽出
   const saveData: NovelData[] = []
   for await (const novelData of novelDataArray) {
-    const isNewData =  checkSQL<NovelData>(novelData)
+    const isNewData = checkSQL<NovelData>(novelData)
     if (isNewData) {
       saveData.push(novelData)
     }
@@ -163,7 +195,7 @@ caption:${captionText}
 tags:[${novelData.tags}]
 
 --------------------
-${text}}`;
+${text}`;
 
     const textPath: string = config.novelSavePath + "/" + novelData.fileName + ".txt";
     // テキストを保存
@@ -186,23 +218,27 @@ ${text}}`;
 }
 
 // SQliteに保存されているかを確認
-const checkSQL =  <T extends NovelData|IllustData>(mediaInfo:T): boolean => {
+const checkSQL = <T extends NovelData | IllustData>(mediaInfo: T): boolean => {
   // resultがすでにSQliteに載ってるかを確認
-  const table: string = mediaInfo.type === "novel" ? "novel" : "illust"
-  // let sql = `SELECT COUNT(*) FROM ${table} WHERE file_name = '${mediaInfo.fileName}' LIMIT 1;`
-  let sql = `SELECT COUNT(*) FROM ${table} WHERE ${table}_id = '${mediaInfo.id}' LIMIT 1;`
-  try{
+  let sql
+  if (mediaInfo.type === "novel") {
+    // novelはファイル名が長くなりがちだからidで確認する
+    sql = `SELECT COUNT(*) FROM novel WHERE novel_id = '${mediaInfo.id}' LIMIT 1;`
+  } else {
+    sql = `SELECT COUNT(*) FROM illust WHERE file_name = '${mediaInfo.fileName}' LIMIT 1;`
+  }
+  try {
     const stmt = db.prepare(sql)
     const row: { "COUNT(*)": number } | undefined = stmt.get(1)
     if (!row) return false;
     // 既にデータが登録されていたらfalseを返す
     if (row["COUNT(*)"] !== 0) return false;
-  }catch(error){
+  } catch (error) {
     console.log(sql)
     console.error(error)
   }
   // 新規のデータであった場合mediaInfoをSQliteに格納
-  let params: (string|string[]|number|undefined)[] = []
+  let params: (string | string[] | number | undefined)[] = []
   if (mediaInfo.type === "illust") {
     sql = "INSERT INTO illust (user_name,user_account, user_id, type,illust_id,illust_title, media_url, file_name) VALUES(?,?,?,?,?,?,?,?);";
     params = [
@@ -239,20 +275,12 @@ const checkSQL =  <T extends NovelData|IllustData>(mediaInfo:T): boolean => {
     // reject("mediaInfo.type error\n" + new Error(`mediaInfo.typeが不正です。\nmediaInfo.type:${mediaInfo.type}`));
   }
   try {
-  db.exec(sql,params)
-  }catch(error){
+    db.exec(sql, params)
+  } catch (error) {
     console.log(params)
     console.error(error)
   }
   return true;
-}
-
-const main = async (): Promise<void> => {
-  await illustDownload()
-  await novelDonwload()
-
-  console.log("保存終了")
-  db.close()
 }
 
 main()
