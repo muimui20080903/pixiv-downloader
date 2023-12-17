@@ -239,19 +239,7 @@ const checkSQL = <T extends NovelData | IllustData>(mediaInfo: T): boolean => {
   }
   // 新規のデータであった場合mediaInfoをSQliteに格納
   let params: (string | string[] | number | undefined)[] = []
-  if (mediaInfo.type === "illust") {
-    sql = "INSERT INTO illust (user_name,user_account, user_id, type,illust_id,illust_title, media_url, file_name) VALUES(?,?,?,?,?,?,?,?);";
-    params = [
-      mediaInfo.userName, //: illust.user.name,
-      mediaInfo.userAccount, //: illust.user.account,
-      mediaInfo.userID, // illust.user.id,
-      mediaInfo.type, //: illust.type,
-      mediaInfo.id, // illust.id,
-      mediaInfo.title, // : illust.title,
-      mediaInfo.url, //: meta_pages.image_urls.original,
-      mediaInfo.fileName,
-    ]
-  } else if (mediaInfo.type === "novel") {
+  if (mediaInfo.type === "novel") {
     sql = "INSERT INTO novel (user_name,user_account, user_id, type,series_id,series_title, create_date, novel_id,novel_title, novel_caption, tags, media_url, page_count, file_name) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     params = [
       mediaInfo.userName, //: illust.user.name,
@@ -270,9 +258,17 @@ const checkSQL = <T extends NovelData | IllustData>(mediaInfo: T): boolean => {
       mediaInfo.fileName,
     ]
   } else {
-    // 定義されていないtypeの場合はエラーを返す
-    return false;
-    // reject("mediaInfo.type error\n" + new Error(`mediaInfo.typeが不正です。\nmediaInfo.type:${mediaInfo.type}`));
+    sql = "INSERT INTO illust (user_name,user_account, user_id, type,illust_id,illust_title, media_url, file_name) VALUES(?,?,?,?,?,?,?,?);";
+    params = [
+      mediaInfo.userName, //: illust.user.name,
+      mediaInfo.userAccount, //: illust.user.account,
+      mediaInfo.userID, // illust.user.id,
+      mediaInfo.type, //: illust.type,
+      mediaInfo.id, // illust.id,
+      mediaInfo.title, // : illust.title,
+      mediaInfo.url, //: meta_pages.image_urls.original,
+      mediaInfo.fileName,
+    ]
   }
   try {
     db.exec(sql, params)
